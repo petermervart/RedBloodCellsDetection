@@ -84,94 +84,94 @@ def main():
         if gaussian_blur_kernel % 2 == 0:
             gaussian_blur_kernel = gaussian_blur_kernel + 1
 
-        img_blur = cv2.GaussianBlur(img_main, (gaussian_blur_kernel, gaussian_blur_kernel), cv2.BORDER_DEFAULT)   # aplikovanie gauss blur
+        img_blur = cv2.GaussianBlur(img_main, (gaussian_blur_kernel, gaussian_blur_kernel), cv2.BORDER_DEFAULT)   # application of Gaussian blur
 
-        lower_bound = np.array([color_min_h,color_min_s,color_min_v])
-        upper_bound = np.array([color_max_h,color_max_s,color_max_v])
+        lower_bound = np.array([color_min_h, color_min_s, color_min_v])
+        upper_bound = np.array([color_max_h, color_max_s, color_max_v])
 
-        img = cv2.inRange(img_blur, lower_bound, upper_bound)   # filtrovanie farby
+        img = cv2.inRange(img_blur, lower_bound, upper_bound)   # color filtering
 
-        img = cv2.bitwise_and(img_blur, img_blur, mask=img)  # odstránenie nevyhovujúcich častí z obrázka
+        img = cv2.bitwise_and(img_blur, img_blur, mask=img)  # removing non-compliant parts from the image
 
         if dilatation_size % 2 == 0:
             dilatation_size += 1
 
-        img = cv2.dilate(img, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (dilatation_size, dilatation_size)))   # dilatácia
+        img = cv2.dilate(img, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (dilatation_size, dilatation_size)))   # dilation
 
         img = cv2.cvtColor(img, cv2.COLOR_HSV2RGB)
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)   # do gray modelu
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)   # to gray model
 
-        img = cv2.GaussianBlur(img, (5, 5), cv2.BORDER_DEFAULT)   # znova gauss blur
+        img = cv2.GaussianBlur(img, (5, 5), cv2.BORDER_DEFAULT)   # Gaussian blur again
 
         ret, img = cv2.threshold(img, treshold_min, treshold_max, cv2.THRESH_TOZERO)   # threshold to zero
 
         cv2.imshow('Before filling', img)
 
-        img_contours, hierarchy = cv2.findContours(img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)   # nájdenie kontúr
+        img_contours, hierarchy = cv2.findContours(img, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)   # finding contours
 
         for cnt in img_contours:
-            img = cv2.drawContours(img, [cnt], 0, 255, -1)   # zakreslenie kontúr do aktuálneho obrázku
-            cv2.drawContours(img_source, [cnt], 0, (255, 255, 255), -1)   # zakreslenie kontúr do kópie pôvodného obrázku
+            img = cv2.drawContours(img, [cnt], 0, 255, -1)   # drawing contours into the current image
+            cv2.drawContours(img_source, [cnt], 0, (255, 255, 255), -1)   # drawing contours into a copy of the original image
 
-        kernel = np.ones((3,3),np.uint8)
-        sure_bg = cv2.dilate(img, kernel, iterations=1)   # dilatácia = pozadie krviniek
+        kernel = np.ones((3, 3), np.uint8)
+        sure_bg = cv2.dilate(img, kernel, iterations=1)   # dilation = background of cells
 
-        watershed_ratio = watershed_ratio/50
+        watershed_ratio = watershed_ratio / 50
 
-        dist_transform = cv2.distanceTransform(img, cv2.DIST_L2, 3)   # vzdialenosť na základe pomeru pozadia popredia
-        ret, sure_fg = cv2.threshold(dist_transform, watershed_ratio * dist_transform.max(), 255, 0)   # threshold na získanie popredia
+        dist_transform = cv2.distanceTransform(img, cv2.DIST_L2, 3)   # distance based on the ratio of background to foreground
+        ret, sure_fg = cv2.threshold(dist_transform, watershed_ratio * dist_transform.max(), 255, 0)   # threshold to obtain the foreground
 
         sure_fg = np.uint8(sure_fg)
-        unknown = cv2.subtract(sure_bg, sure_fg)   # priestor medz pozadím a popredím = neznáma časť
+        unknown = cv2.subtract(sure_bg, sure_fg)   # area between background and foreground = unknown part
 
-        ret, markers = cv2.connectedComponents(sure_fg)   # spojené komponenty na získanie markers pre watershed
+        ret, markers = cv2.connectedComponents(sure_fg)   # connected components to obtain markers for watershed
 
         markers = markers + 1
 
         markers[unknown == 255] = 0
 
-        img_new = img_source.copy()   # skopírovanie pôvodného obrázku so zakreslenými kontúrami
+        img_new = img_source.copy()   # copying the original image with drawn contours
 
         markers = cv2.watershed(img_new, markers)   # watershed
 
         markers_length_x = len(markers)
         markers_length_y = len(markers[0])
 
-        for i in range(0, markers_length_x):   # zkreslenie pixelov krížovým spôsobom
+        for i in range(0, markers_length_x):   # distortion of pixels in a crosswise manner
             for j in range(0, markers_length_x):
                 if(markers[i, j] == -1):
                     img[i, j] = 0
                     if(i + 1 < markers_length_x):
-                        img[i+1, j] = 0
+                        img[i + 1, j] = 0
                     if(i - 1 > 0):
-                        img[i-1, j] = 0
+                        img[i - 1, j] = 0
                     if (j + 1 < markers_length_y):
                         img[i, j + 1] = 0
-                    if (j -1 > 0):
+                    if (j - 1 > 0):
                         img[i, j - 1] = 0
 
         label_hue = np.uint8(179 * markers / np.max(markers))
         blank_ch = 255 * np.ones_like(label_hue)
         labeled_img = cv2.merge([label_hue, blank_ch, blank_ch])
-        labeled_img = cv2.cvtColor(labeled_img, cv2.COLOR_HSV2BGR)   # zobrazenie kontúr rôznými farbami
+        labeled_img = cv2.cvtColor(labeled_img, cv2.COLOR_HSV2BGR)   # displaying contours in different colors
 
         for cnt in img_contours:
-            cv2.drawContours(img_source, [cnt], 0, (255, 255, 255), -1)   # zakreslenie obrysov kontúr do obrázka
+            cv2.drawContours(img_source, [cnt], 0, (255, 255, 255), -1)   # drawing contours outlines into the image
 
         cv2.imshow('Before finding contours', img)
 
-        contours_all, hierarchy = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)   # nájdenie kontúr v obrázku
+        contours_all, hierarchy = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)   # finding contours in the image
 
         for cnt in contours_all:
-            cv2.drawContours(basic_img, [cnt], 0, (0, 255, 0), 2)   # zakreslenie kontúr do pôvodného obrázka
+            cv2.drawContours(basic_img, [cnt], 0, (0, 255, 0), 2)   # drawing contours into the original image
 
-        print(len(contours_all))   # vypísanie počtu nájdených kontúr
+        print(len(contours_all))   # printing the number of found contours
 
         cv2.imshow('Result', basic_img)
 
         cv2.imshow('Image markers', labeled_img)
 
-        k = cv2.waitKey(0) & 0xFF   # čakať na key, ak je to ESC tak vypnutie ak niečo iné znovu zbehnutie while cyklu
+        k = cv2.waitKey(0) & 0xFF   # wait for a key, if it is ESC then turn off, otherwise repeat while cycle
         if k == 27:
             break
 
